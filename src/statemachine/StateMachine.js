@@ -21,9 +21,10 @@ export class StateMachine {
    * @param {Function} condition () => boolean
    * @param {Function} handler   () => nextState | null (nullは遷移なし)
    * @param {number} interval    何tickごとに評価するか
+   * @param {number} priority    優先度（高いほど優先、デフォルト0）
    */
-  addTransition(state, condition, handler, interval = 1) {
-    this.transitions.push({ state, condition, handler, interval, tickCount: 0 })
+  addTransition(state, condition, handler, interval = 1, priority = 0) {
+    this.transitions.push({ state, condition, handler, interval, tickCount: 0, priority })
   }
 
   /**
@@ -48,9 +49,12 @@ export class StateMachine {
         }
       }
 
-      // 現在stateのトランジションを評価
-      for (const tr of this.transitions) {
-        if (tr.state !== this.state) continue
+      // 現在stateのトランジションを評価（優先度順にソート）
+      const sortedTransitions = this.transitions
+        .filter(tr => tr.state === this.state)
+        .sort((a, b) => b.priority - a.priority)
+
+      for (const tr of sortedTransitions) {
         tr.tickCount++
         if (tr.tickCount < tr.interval) continue
         tr.tickCount = 0
@@ -69,4 +73,5 @@ export class StateMachine {
 
   setState(state) { this.state = state }
   getState() { return this.state }
+  getTickCount() { return this.tickCount }
 }

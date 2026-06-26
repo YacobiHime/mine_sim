@@ -192,7 +192,7 @@ export class GuardAgent extends BaseAgent {
   tick() {
     super.tick()
     // 50tickごとに自動スキャン
-    if (this.sm.tickCount % 50 === 0) {
+    if (this.sm.getTickCount() % 50 === 0) {
       this._scanThreats().catch(() => {})
     }
   }

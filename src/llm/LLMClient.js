@@ -4,8 +4,10 @@
  * このシミュレーションではLLMが行動決定（nextState選択）とセリフ生成を担う。
  */
 
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://192.168.15.150:11434/v1'
-const MODEL      = process.env.OLLAMA_MODEL || 'gemma4:e4b'
+import { config } from '../config.js'
+
+const OLLAMA_URL = config.ollama.url
+const MODEL      = config.ollama.model
 
 /**
  * LLMに問い合わせ、JSON形式で行動決定を得る。

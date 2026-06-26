@@ -18,27 +18,24 @@ import { BuilderAgent } from './agents/BuilderAgent.js'
 import { FarmerAgent }  from './agents/FarmerAgent.js'
 import { GuardAgent }   from './agents/GuardAgent.js'
 import { LeaderAgent }  from './agents/LeaderAgent.js'
-
-// ---- 設定 ----
-const MC_HOST    = process.env.MC_HOST    ?? '192.168.15.10'
-const MC_PORT    = parseInt(process.env.MC_PORT ?? '25565')
-const MC_VERSION = process.env.MC_VERSION ?? '1.21.4'
+import { config }       from './config.js'
 
 // エージェント定義（名前・役職・クラス）
-const AGENT_CONFIGS = [
-  { username: 'Leader_Alex',   AgentClass: LeaderAgent  },
-  { username: 'Builder_Bob',   AgentClass: BuilderAgent },
-  { username: 'Farmer_Carol',  AgentClass: FarmerAgent  },
-  { username: 'Guard_Dave',    AgentClass: GuardAgent   },
-]
+const AGENT_CONFIGS = config.agents.map(a => ({
+  username: a.username,
+  AgentClass: a.role === 'leader'  ? LeaderAgent  :
+              a.role === 'builder' ? BuilderAgent :
+              a.role === 'farmer'  ? FarmerAgent  :
+              a.role === 'guard'   ? GuardAgent   : LeaderAgent,
+}))
 
 // ---- コロニー共有状態 ----
 const colony = new Colony()
 
 // 初期資源
-colony.addResource('wood',  5)
-colony.addResource('food',  10)
-colony.addResource('wheat', 3)
+colony.addResource('wood',  config.initialResources.wood)
+colony.addResource('food',  config.initialResources.food)
+colony.addResource('wheat', config.initialResources.wheat)
 
 // 最初の建築依頼
 colony.requestBuild('house')
@@ -48,31 +45,51 @@ colony.requestBuild('farm')
 const agents = []
 let   tickCounter = 0
 
-function createBot(config) {
-  return new Promise((resolve) => {
+/**
+ * pathfinder の初期化を共通関数化
+ */
+async function setupPathfinder(bot) {
+  try {
+    const { pathfinder, Movements } = await import('mineflayer-pathfinder')
+    bot.loadPlugin(pathfinder)
+    const mcData = (await import('minecraft-data')).default(bot.version)
+    const movements = new Movements(bot, mcData)
+    bot.pathfinder.setMovements(movements)
+    return true
+  } catch (e) {
+    console.warn(`[${bot.username}] pathfinder 初期化失敗:`, e.message)
+    return false
+  }
+}
+
+/**
+ * ボット生成（再接続ロジック付き）
+ */
+function createBot(agentConfig, retryCount = 0) {
+  return new Promise((resolve, reject) => {
     const bot = mineflayer.createBot({
-      host:     MC_HOST,
-      port:     MC_PORT,
-      username: config.username,
-      version:  MC_VERSION,
+      host:     config.server.host,
+      port:     config.server.port,
+      username: agentConfig.username,
+      version:  config.server.version,
       auth:     'offline',  // 認証なしモード
     })
 
     bot.on('spawn', async () => {
-      console.log(`[System] ${config.username} がスポーンしました`)
+      console.log(`[System] ${agentConfig.username} がスポーンしました`)
 
-      // pathfinderプラグインをロード（インストールされていれば）
-      try {
-        const { pathfinder, Movements } = await import('mineflayer-pathfinder')
-        bot.loadPlugin(pathfinder)
-        const mcData = (await import('minecraft-data')).default(bot.version)
-        const movements = new Movements(bot, mcData)
-        bot.pathfinder.setMovements(movements)
-      } catch {
-        console.warn(`[${config.username}] pathfinderなし（移動機能無効）`)
-      }
+      // pathfinderプラグインをロード
+      await setupPathfinder(bot)
 
-      const agent = new config.AgentClass(config.username, bot, colony)
+      const agent = new agentConfig.AgentClass(agentConfig.username, bot, colony)
+
+      // ゲーム内時間に合わせた sleep/wake
+      bot.on('time', () => {
+        const timeOfDay = bot.time.timeOfDay
+        // 13000-23000 = 夜
+        const isNight = timeOfDay > 13000 && timeOfDay < 23000
+        if (agent) agent.isNight = isNight
+      })
 
       // 衛兵に巡回ポイントを設定（スポーン座標周辺）
       if (agent instanceof GuardAgent) {
@@ -103,15 +120,23 @@ function createBot(config) {
     })
 
     bot.on('error', (err) => {
-      console.error(`[${config.username}] エラー:`, err.message)
+      if (retryCount > 5) {
+        console.error(`[${agentConfig.username}] 再接続上限。停止。`)
+        reject(err)
+        return
+      }
+      console.error(`[${agentConfig.username}] エラー:`, err.message)
     })
 
     bot.on('kicked', (reason) => {
-      console.warn(`[${config.username}] キックされました:`, reason)
+      console.warn(`[${agentConfig.username}] キックされました:`, reason)
     })
 
     bot.on('end', () => {
-      console.warn(`[${config.username}] 接続終了`)
+      console.warn(`[${agentConfig.username}] 切断。5秒後に再接続...`)
+      setTimeout(() => {
+        createBot(agentConfig, retryCount + 1).then(resolve).catch(reject)
+      }, 5000)
     })
   })
 }
@@ -120,7 +145,7 @@ function createBot(config) {
 // MineColonies の ColonyTickHandler に相当。
 // 全エージェントを毎tick更新し、コロニー状態も更新する。
 function startColonyLoop() {
-  const TICK_MS = 50 // 20tps（Minecraft標準）
+  const TICK_MS = config.colony.tickMs
 
   setInterval(() => {
     tickCounter++
@@ -134,8 +159,8 @@ function startColonyLoop() {
       }
     }
 
-    // 1000tickごとに状態サマリーを出力
-    if (tickCounter % 1000 === 0) {
+    // statsPrintInterval tickごとに状態サマリーを出力
+    if (tickCounter % config.colony.statsPrintInterval === 0) {
       console.log('\n' + colony.getSummary() + '\n')
     }
   }, TICK_MS)
@@ -144,14 +169,14 @@ function startColonyLoop() {
 // ---- 起動シーケンス ----
 async function main() {
   console.log('=== Colony Simulation 起動 ===')
-  console.log(`サーバー: ${MC_HOST}:${MC_PORT}  バージョン: ${MC_VERSION}`)
-  console.log(`エージェント数: ${AGENT_CONFIGS.length}`)
-  console.log(`Ollama: ${process.env.OLLAMA_URL ?? 'http://192.168.15.150:11434/v1'}`)
+  console.log(`サーバー: ${config.server.host}:${config.server.port}  バージョン: ${config.server.version}`)
+  console.log(`エージェント数: ${config.agents.length}`)
+  console.log(`Ollama: ${config.ollama.url}`)
   console.log('==============================\n')
 
   // 順番に接続（サーバー負荷軽減のため5秒ずつ間隔）
-  for (const config of AGENT_CONFIGS) {
-    await createBot(config)
+  for (const agentConfig of AGENT_CONFIGS) {
+    await createBot(agentConfig)
     await new Promise(r => setTimeout(r, 5000))
   }
 

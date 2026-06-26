@@ -17,6 +17,7 @@ export class FarmerAgent extends BaseAgent {
   constructor(name, bot, colony) {
     super(name, 'farmer', bot, colony)
     this.harvestedWheat = 0
+    this.seedStock = 2        // 初期種2個
     this.fieldReady = false   // 農地が準備済みか
     this.cropGrowTimer = 0    // 作物成長タイマー（tick）
     this.cropGrown = false
@@ -35,7 +36,8 @@ export class FarmerAgent extends BaseAgent {
     if (!this.fieldReady) {
       actions.push('農地を耕す')
     }
-    if (this.fieldReady && !this.cropGrown && this.colony.hasResource('wheat', 1)) {
+    const hasSeeds = (this.seedStock ?? 0) > 0 || this.colony.hasResource('wheat', 1)
+    if (this.fieldReady && !this.cropGrown && hasSeeds) {
       actions.push('種を植える')
     }
     if (this.cropGrown) {
@@ -82,27 +84,35 @@ export class FarmerAgent extends BaseAgent {
 
   async _plantSeeds() {
     this.speak('種を植えます')
-    if (!this.colony.consumeResource('wheat', 1)) {
-      this.speak('種がない…')
+    // 自前の種を優先
+    if ((this.seedStock ?? 0) > 0) {
+      this.seedStock--
+    } else if (!this.colony.consumeResource('wheat', 1)) {
+      this.speak('種がない…次の収穫を待とう')
+      // 農地は耕し直して再試行できるよう fieldReady を false に
+      this.fieldReady = false
       return false
     }
     await this._sleep(2000)
     this.cropGrown = false
     this.cropGrowTimer = 0
     this.colony.log(`${this.name}が種を植えた`)
-    this.speak('植えた！成長が楽しみだ')
+    this.speak('植えた！')
     return true
   }
 
   async _harvest() {
     this.speak('収穫します！')
     await this._sleep(3000)
-    const amount = 3 + Math.floor(Math.random() * 3) // 3-5
+    const amount = 3 + Math.floor(Math.random() * 3)
     this.harvestedWheat += amount
+    // 収穫した小麦の1/3を種として自動保持
+    const seeds = Math.max(1, Math.floor(amount / 3))
+    this.seedStock = (this.seedStock ?? 0) + seeds
     this.cropGrown = false
-    this.fieldReady = false // 次のサイクルのため
-    this.colony.log(`${this.name}が小麦${amount}個を収穫`)
-    this.speak(`小麦${amount}個収穫した！`)
+    this.fieldReady = false
+    this.colony.log(`${this.name}が小麦${amount}個収穫(種${seeds}個確保)`)
+    this.speak(`収穫完了！小麦${amount}個(種${seeds}個)`)
     return true
   }
 

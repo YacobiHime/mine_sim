@@ -9,12 +9,13 @@ import { decideAction, generateSpeech } from '../llm/LLMClient.js'
 
 // MineColonies の AIWorkerState に相当する共通ステート
 export const CommonState = {
-  IDLE:           'IDLE',
-  DECIDING:       'DECIDING',    // LLMに行動を問い合わせ中
-  EXECUTING:      'EXECUTING',   // 行動実行中
-  NEEDS_RESOURCE: 'NEEDS_RESOURCE',
-  EATING:         'EATING',
-  SLEEPING:       'SLEEPING',
+  IDLE:             'IDLE',
+  DECIDING:         'DECIDING',    // LLMに行動を問い合わせ中
+  EXECUTING:        'EXECUTING',   // 行動実行中
+  NEEDS_RESOURCE:   'NEEDS_RESOURCE',
+  EATING:           'EATING',
+  SLEEPING:         'SLEEPING',
+  EMERGENCY_RETREAT: 'EMERGENCY_RETREAT',  // 緊急退避
 }
 
 export class BaseAgent {
@@ -34,8 +35,10 @@ export class BaseAgent {
     this.hunger     = 20      // 0-20
     this.health     = 20
     this.isSleeping = false
+    this.isNight    = false   // 夜かどうか
     this.currentTask = null   // 現在実行中のタスク名
     this.llmBusy    = false   // LLM呼び出し中フラグ
+    this.lastDirective = null // 指導者からの最新指示
 
     // MineColonies の TickRateStateMachine に相当
     this.sm = new StateMachine(CommonState.IDLE, (err) => {
@@ -71,7 +74,18 @@ export class BaseAgent {
   // ---- 共通ステートマシン設定 ----
 
   _setupCommonTransitions() {
-    // 割り込みイベント：空腹になったら食事
+    // 優先度1（最高）：瀕死(health<4) → EMERGENCY_RETREAT
+    this.sm.addEvent(
+      () => this.health < 4 && this.sm.getState() !== CommonState.EMERGENCY_RETREAT,
+      () => {
+        this.speak('死にそうだ！逃げろ！')
+        this._emergencyRetreat()
+        return CommonState.EMERGENCY_RETREAT
+      },
+      5  // 5tickごとにチェック
+    )
+
+    // 優先度2：空腹(hunger<8) → EATING
     this.sm.addEvent(
       () => this.hunger < 8 && this.sm.getState() !== CommonState.EATING,
       () => {
@@ -81,7 +95,17 @@ export class BaseAgent {
       20
     )
 
-    // IDLE → DECIDING（10tickごとに次の行動を判断）
+    // 夜になったら寝る（MineColonies の EntityAISleep 相当）
+    this.sm.addEvent(
+      () => this.isNight && this.sm.getState() !== CommonState.SLEEPING,
+      () => {
+        this.speak('夜になった。休もう')
+        return CommonState.SLEEPING
+      },
+      100
+    )
+
+    // IDLE → DECIDING（10tickごとに次の行動を判断）優先度0（通常）
     this.sm.addTransition(
       CommonState.IDLE,
       () => !this.llmBusy,
@@ -89,15 +113,18 @@ export class BaseAgent {
         this._triggerDecision()
         return CommonState.DECIDING
       },
-      10
+      10,
+      0  // 通常優先度
     )
 
-    // DECIDING → IDLE（LLM応答待ち、完了したらEXECUTINGへ遷移はexecuteActionの中で行う）
+    // DECIDING → IDLE（LLM応答待ち）
+    // 注意: 優先度を低くして、EXECUTING移行後は発火しないようにする
     this.sm.addTransition(
       CommonState.DECIDING,
       () => !this.llmBusy,
       () => CommonState.IDLE,
-      5
+      5,
+      -1  // 最低優先度（EXECUTING移行後は発火しない）
     )
 
     // EATING
@@ -121,10 +148,42 @@ export class BaseAgent {
       },
       20
     )
+
+    // SLEEPING → IDLE（朝になったら）
+    this.sm.addTransition(
+      CommonState.SLEEPING,
+      () => !this.isNight,
+      () => {
+        this.speak('朝だ！働くぞ')
+        return CommonState.IDLE
+      },
+      100
+    )
+
+    // EMERGENCY_RETREAT → IDLE
+    this.sm.addTransition(
+      CommonState.EMERGENCY_RETREAT,
+      () => this.health >= 10,
+      () => {
+        this.speak('落ち着いた')
+        return CommonState.IDLE
+      },
+      10
+    )
   }
 
   /** 継承先でジョブ固有のトランジションを追加する */
   _setupJobTransitions() {}
+
+  /** 緊急退避処理 */
+  async _emergencyRetreat() {
+    // ランダム方向に走る（pathfinder未使用でも動く）
+    this.bot.setControlState('sprint', true)
+    await this._sleep(2000)
+    this.bot.setControlState('sprint', false)
+    this.health = Math.min(20, this.health + 2)
+    this.sm.setState(CommonState.IDLE)
+  }
 
   // ---- LLM行動決定 ----
 
@@ -138,7 +197,9 @@ export class BaseAgent {
 
       this.speak(result.speech)
       this.currentTask = result.action
+      // 先にEXECUTINGにしてからllmBusyをfalseにする
       this.sm.setState(CommonState.EXECUTING)
+      this.llmBusy = false  // falseにした後にexecuteAction
 
       // 行動実行（非同期、完了したらIDLEへ）
       this.executeAction(result.action)
@@ -153,20 +214,30 @@ export class BaseAgent {
         })
     } catch (err) {
       console.error(`[${this.name}] LLM error:`, err)
-      this.sm.setState(CommonState.IDLE)
-    } finally {
       this.llmBusy = false
+      this.sm.setState(CommonState.IDLE)
     }
+    // finally で llmBusy = false を消す（上で制御するため）
   }
 
   _buildSituationPrompt() {
+    // 仲間のサマリーを生成
+    const teammates = Object.values(this.colony.agents)
+      .filter(a => a !== this)
+      .map(a => `  ${a.name}(${a.role}): HP${a.health} 空腹${Math.floor(a.hunger)} 状態=${a.sm.getState()} タスク=${a.currentTask ?? 'なし'}`)
+      .join('\n')
+
     return [
       this.colony.getSummary(),
       `--- 自分の状態 ---`,
       `名前: ${this.name}  役職: ${this.role}`,
-      `体力: ${this.health}/20  空腹度: ${this.hunger}/20`,
+      `体力: ${this.health}/20  空腹度: ${Math.floor(this.hunger)}/20`,
       `現在地: ${this._posStr()}`,
       `現在の状態: ${this.sm.getState()}`,
+      `--- 仲間の状態 ---`,
+      teammates || '  （なし）',
+      `--- 指導者からの最新指示 ---`,
+      this.lastDirective ?? '  （なし）',
     ].join('\n')
   }
 

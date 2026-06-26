@@ -6,6 +6,14 @@
 
 import { BaseAgent, CommonState } from './BaseAgent.js'
 
+// MineColonies の WorkOrderType に相当する定数
+const WorkOrderType = {
+  BUILD:   'BUILD',
+  UPGRADE: 'UPGRADE',
+  REPAIR:  'REPAIR',
+  REMOVE:  'REMOVE',
+}
+
 // MineColonies の AIWorkerState（Builder固有）に相当
 const BuilderState = {
   GATHER_WOOD:   'GATHER_WOOD',
@@ -29,19 +37,12 @@ export class BuilderAgent extends BaseAgent {
 
   getAvailableActions() {
     const actions = []
-
-    if (this.colony.hasResource('wood', 5) && this.colony.getNextBuildJob()) {
-      actions.push('建築する')
-    }
-    if (this.colony.inventory.wood < 20) {
-      actions.push('木を伐採する')
-    }
-    if (this.woodInHand > 0) {
-      actions.push('木材を倉庫に運ぶ')
-    }
+    if (this.colony.hasResource('wood', 5) && this.colony.getNextBuildJob()) actions.push('建築する')
+    if (this.colony.inventory.wood < 20) actions.push('木を伐採する')
+    if (this.woodInHand > 0) actions.push('木材を倉庫に運ぶ')
+    if (this.colony.inventory.stone < 10) actions.push('石を採掘する')
     actions.push('周囲を偵察する')
     actions.push('待機する')
-
     return actions
   }
 
@@ -55,6 +56,8 @@ export class BuilderAgent extends BaseAgent {
         return this._build()
       case '周囲を偵察する':
         return this._scout()
+      case '石を採掘する':
+        return this._mineStone()
       default:
         await this._sleep(3000)
         return true
@@ -103,20 +106,47 @@ export class BuilderAgent extends BaseAgent {
     const job = this.colony.getNextBuildJob()
     if (!job) { this.speak('建築依頼がない'); return false }
 
-    this.speak(`${job}の建築を開始します！`)
-    const cost = job === 'house' ? 10 : 5
+    const def = this.colony.buildingDefs?.[job]
+    if (!def) { this.speak(`${job}の設計図がない`); return false }
 
-    if (!this.colony.consumeResource('wood', cost)) {
-      this.speak('木材が足りない…')
+    // 資源チェック
+    if (!this.colony.hasResource('wood', def.woodCost)) {
+      this.speak(`木材が足りない(必要:${def.woodCost} 所持:${this.colony.inventory.wood})`)
+      return false
+    }
+    if (def.stoneCost > 0 && !this.colony.hasResource('stone', def.stoneCost)) {
+      this.speak(`石材が足りない(必要:${def.stoneCost})`)
       return false
     }
 
-    // 実際の建築をシミュレート（ここをStructurize連携に拡張可能）
-    this.colony.log(`${this.name}が${job}の建築中...`)
-    await this._sleep(5000) // 建築時間
+    this.speak(`${job}の建築を開始！(木材${def.woodCost}本使用)`)
+    this.colony.consumeResource('wood', def.woodCost)
+    if (def.stoneCost > 0) this.colony.consumeResource('stone', def.stoneCost)
 
+    // 足場ブロックを実際に設置（シンプルな3x3基礎）
+    try {
+      const pos = this.bot.entity.position.floored()
+      const oakLog = this.bot.registry?.blocksByName?.['oak_log']
+                     ?? this.bot.registry?.blocksByName?.['minecraft:oak_log']
+      if (oakLog) {
+        // 建物の目印として1ブロック設置
+        const placePos = pos.offset(1, 0, 1)
+        const refBlock = this.bot.blockAt(placePos.offset(0, -1, 0))
+        if (refBlock) {
+          const { default: vec3 } = await import('vec3')
+          await this.bot.placeBlock(refBlock, new vec3(0, 1, 0))
+        }
+      }
+    } catch (e) {
+      // ブロック設置失敗でも建築完了とする（ログのみ）
+      console.warn(`[${this.name}] ブロック設置失敗:`, e.message)
+    }
+
+    // 建築完了処理
+    const buildTime = 3000 + def.woodCost * 500
+    await this._sleep(buildTime)
     this.colony.completeBuild(job)
-    this.speak(`${job}が完成しました！`)
+    this.speak(`${job}完成！`)
     return true
   }
 
@@ -134,6 +164,27 @@ export class BuilderAgent extends BaseAgent {
     } else {
       this.speak('異常なし')
     }
+    return true
+  }
+
+  async _mineStone() {
+    this.speak('石を採掘します')
+    const stoneBlock = this.bot.findBlock({
+      matching: block => ['stone', 'cobblestone', 'deepslate'].some(n => block.name.includes(n)),
+      maxDistance: 20,
+    })
+    if (!stoneBlock) { this.speak('石が見つからない'); return false }
+    try {
+      if (this.bot.pathfinder) {
+        const { goals } = await import('mineflayer-pathfinder')
+        await this.bot.pathfinder.goto(
+          new goals.GoalBlock(stoneBlock.position.x, stoneBlock.position.y, stoneBlock.position.z)
+        )
+      }
+      await this.bot.dig(stoneBlock)
+      this.colony.addResource('stone', 1)
+      this.speak('石を採掘した')
+    } catch { this.speak('採掘できなかった') }
     return true
   }
 }
