@@ -1,0 +1,27 @@
+{
+  "branch": "minecolonies:combat",
+  "costs": [
+    {
+      "type": "minecolonies:item_simple",
+      "item": "minecraft:iron_ingot",
+      "quantity": 64
+    }
+  ],
+  "effects": [
+    {
+      "id": "minecolonies:effects/armordurabilitymultiplier",
+      "level": 5
+    }
+  ],
+  "icon": "minecraft:golden_helmet",
+  "parentResearch": "minecolonies:combat/ironarmor",
+  "requirements": [
+    {
+      "type": "minecolonies:single-building",
+      "building": "minecolonies:townhall",
+      "level": 5
+    }
+  ],
+  "researchLevel": 5,
+  "sortOrder": 1
+}

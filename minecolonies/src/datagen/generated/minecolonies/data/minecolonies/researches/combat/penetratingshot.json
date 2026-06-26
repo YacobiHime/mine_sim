@@ -1,0 +1,26 @@
+{
+  "branch": "minecolonies:combat",
+  "costs": [
+    {
+      "type": "minecolonies:item_simple",
+      "item": "minecraft:flint",
+      "quantity": 32
+    }
+  ],
+  "effects": [
+    {
+      "id": "minecolonies:effects/archerdamageaddition",
+      "level": 2
+    }
+  ],
+  "icon": "minecraft:bow",
+  "parentResearch": "minecolonies:combat/preciseshot",
+  "requirements": [
+    {
+      "type": "minecolonies:building",
+      "building": "minecolonies:archery",
+      "level": 3
+    }
+  ],
+  "researchLevel": 3
+}

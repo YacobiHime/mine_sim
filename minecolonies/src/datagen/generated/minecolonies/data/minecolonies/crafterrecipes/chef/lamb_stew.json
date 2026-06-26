@@ -1,0 +1,38 @@
+{
+  "type": "recipe",
+  "crafter": "chef_crafting",
+  "inputs": [
+    {
+      "item": "minecolonies:onion"
+    },
+    {
+      "item": "minecolonies:garlic"
+    },
+    {
+      "item": "minecraft:carrot"
+    },
+    {
+      "item": "minecraft:potato"
+    },
+    {
+      "item": "minecraft:carrot"
+    },
+    {
+      "item": "minecraft:potato"
+    },
+    {
+      "item": "minecraft:brown_mushroom"
+    },
+    {
+      "item": "minecolonies:cabbage"
+    },
+    {
+      "count": 2,
+      "item": "minecraft:mutton"
+    }
+  ],
+  "intermediate": "minecraft:air",
+  "min-building-level": 4,
+  "result": "minecolonies:lamb_stew",
+  "show-tooltip": true
+}

@@ -1,0 +1,24 @@
+{
+  "type": "recipe",
+  "crafter": "baker_crafting",
+  "inputs": [
+    {
+      "item": "minecolonies:durum"
+    },
+    {
+      "item": "minecolonies:butter"
+    },
+    {
+      "item": "minecraft:sugar"
+    },
+    {
+      "item": "minecraft:egg"
+    },
+    {
+      "item": "minecraft:sweet_berries"
+    }
+  ],
+  "intermediate": "minecraft:air",
+  "result": "minecolonies:muffin_dough",
+  "show-tooltip": true
+}

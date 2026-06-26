@@ -1,0 +1,59 @@
+# eclipse
+/bin
+*.launch
+/.settings
+/.metadata
+/.classpath
+/.project
+/eclipse
+
+# idea
+/out
+*.ipr
+*.iws
+*.iml
+/.idea/*
+!/.idea
+!/.idea/inspectionProfiles/
+!/.idea/codeStyles/
+/.idea/gradle.xml
+/classes
+
+# gradle
+/build
+/.gradle
+
+# other
+/.vscode
+/run
+/runData
+/runClient
+/runServer
+.cache
+/libs
+gradle\.properties
+
+# Exclude all Mac DS_Store files
+/**/.DS_Store
+
+# Exclude all Windows stuff
+/**/Thumbs.db
+
+README.txt
+*.hprof
+
+# Build stuff
+*changelog.txt
+tools/export_lang/.api_key
+tools/fix_model_angle/*.class
+tools/fix_model_angle/*.class
+src/main/generated/resources/.cache/cache
+
+logs/
+gradle/local.gradle
+gradle/local.configuration.gradle
+
+/src/main/resources/assets/minecolonies/lang/**
+!src/main/assets/minecolonies/lang/manual_en_us.json
+
+runs/

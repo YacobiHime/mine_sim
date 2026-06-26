@@ -1,0 +1,27 @@
+{
+  "type": "recipe",
+  "crafter": "chef_crafting",
+  "inputs": [
+    {
+      "count": 2,
+      "item": "minecolonies:garlic"
+    },
+    {
+      "count": 2,
+      "item": "minecolonies:cabbage"
+    },
+    {
+      "item": "minecolonies:onion"
+    },
+    {
+      "item": "minecraft:cod"
+    },
+    {
+      "item": "minecraft:brown_mushroom"
+    }
+  ],
+  "intermediate": "minecraft:air",
+  "min-building-level": 4,
+  "result": "minecolonies:fish_dinner",
+  "show-tooltip": true
+}

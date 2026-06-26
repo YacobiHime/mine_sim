@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  push:
+    paths:
+      - src/**
+    branches:
+      - "version/*"
+      - "release/*"
+      - "testing/*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  release:
+    uses: ldtteam/operapublicacreator/.github/workflows/gradle.publish.yaml@main
+    with:
+      java: 17
+      curse_release_type: ${{ contains(github.ref, 'release') && 'release' || 'beta' }}
+    secrets: inherit

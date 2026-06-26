@@ -1,0 +1,90 @@
+configurations {
+    library
+    implementation.extendsFrom library
+}
+
+minecraft.runs.all {
+    lazyToken('minecraft_classpath') {
+        configurations.library.copyRecursive().resolve().collect { it.absolutePath }.join(File.pathSeparator)
+    }
+}
+
+project.tasks.getByName("processResources", {task ->
+    task.duplicatesStrategy 'include'
+})
+
+repositories {
+    maven {
+        name "JEI"
+        url 'https://maven.blamejared.com/'
+    }
+    maven {
+        name "JourneyMap"
+        url "https://jm.gserv.me/repository/maven-public/"
+    }
+    maven {
+        name "Rei"
+        url "https://maven.shedaniel.me/"
+    }
+    maven {
+        name "Dynamic Trees"
+        url "https://harleyoconnor.com/maven"
+    }
+    maven { url = 'https://files.minecraftforge.net/maven' }
+    mavenLocal()
+    mavenCentral()
+    maven {
+        url "https://plugins.gradle.org/m2/"
+    }
+}
+
+dependencies {
+    compileOnly (fg.deobf("com.ldtteam:domum_ornamentum:${project.domumOrnamentumVersion}:universal")){
+        transitive = false
+    }
+    runtimeOnly (fg.deobf("com.ldtteam:domum_ornamentum:${project.domumOrnamentumVersion}:universal")){
+        transitive = false
+    }
+
+    implementation (fg.deobf("com.ldtteam:blockui:${project.blockUI_version}")){
+        transitive = false
+    }
+
+    implementation (fg.deobf("com.ldtteam:structurize:${project.structurize_version}")){
+        transitive = false
+    }
+
+    implementation (fg.deobf("com.ldtteam:multipiston:${project.multiPistonVersion}")){
+        transitive = false
+    }
+
+    implementation fg.deobf("com.ldtteam:datagenerators:${project.dataGeneratorsVersion}:universal") {
+        transitive = false
+    }
+
+    // optional compat mods (not included in test environment by default)
+
+    compileOnly fg.deobf("mezz.jei:jei-${project.jei_mcversion}-common-api:${project.jei_version}")
+    compileOnly fg.deobf("mezz.jei:jei-${project.jei_mcversion}-forge-api:${project.jei_version}")
+    runtimeOnly fg.deobf("mezz.jei:jei-${project.jei_mcversion}-forge:${project.jei_version}")
+
+    compileOnly fg.deobf("info.journeymap:journeymap-api:${project.jmapApiVersion}")
+    if (project.hasProperty("runWithJourneymap") && project.runWithJourneymap.toBoolean()) {
+         runtimeOnly fg.deobf("flat:journeymap:${project.jmapMcVersion}-${project.jmapVersion}-forge")
+    }
+
+    if (project.hasProperty("dynamicTreesVersion")) {
+        if (project.hasProperty("runWithDynamicTrees") && project.runWithDynamicTrees.toBoolean()) {
+            implementation fg.deobf("com.ferreusveritas.dynamictrees:DynamicTrees-${project.dynamicTreesMcVersion}:${project.dynamicTreesVersion}")
+        } else {
+            compileOnly fg.deobf("com.ferreusveritas.dynamictrees:DynamicTrees-${project.dynamicTreesMcVersion}:${project.dynamicTreesVersion}")
+        }
+    }
+
+    // replace "compileOnly" with "library" when you want to include it for testing
+    // compileOnly fg.deobf("slimeknights.tconstruct:TConstruct:${project.exactMinecraftVersion}-${project.tinkersConstructVersion}")
+    // compileOnly fg.deobf("slimeknights.mantle:Mantle:${project.exactMinecraftVersion}-${project.mantleVersion}")
+
+    // apiCompileOnly fg.deobf("slimeknights.mantle:Mantle:${project.exactMinecraftVersion}-${project.mantleVersion}")
+    // apiCompileOnly fg.deobf("slimeknights.tconstruct:TConstruct:${project.exactMinecraftVersion}-${project.tinkersConstructVersion}")
+}

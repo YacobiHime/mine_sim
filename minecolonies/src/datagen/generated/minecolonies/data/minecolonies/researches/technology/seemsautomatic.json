@@ -1,0 +1,27 @@
+{
+  "branch": "minecolonies:technology",
+  "costs": [
+    {
+      "type": "minecolonies:item_simple",
+      "item": "minecraft:iron_ingot",
+      "quantity": 512
+    }
+  ],
+  "effects": [
+    {
+      "id": "minecolonies:effects/blockplacespeedmultiplier",
+      "level": 4
+    }
+  ],
+  "icon": "minecraft:blaze_powder",
+  "parentResearch": "minecolonies:technology/tools",
+  "requirements": [
+    {
+      "type": "minecolonies:building",
+      "building": "minecolonies:blacksmith",
+      "level": 5
+    }
+  ],
+  "researchLevel": 5,
+  "subtitle": "com.minecolonies.research.technology.seemsautomatic.subtitle"
+}

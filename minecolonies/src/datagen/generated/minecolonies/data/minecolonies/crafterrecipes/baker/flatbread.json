@@ -1,0 +1,20 @@
+{
+  "type": "recipe",
+  "count": 2,
+  "crafter": "baker_crafting",
+  "inputs": [
+    {
+      "item": "minecolonies:durum"
+    },
+    {
+      "item": "minecolonies:durum"
+    },
+    {
+      "item": "minecolonies:large_water_bottle"
+    }
+  ],
+  "intermediate": "minecraft:air",
+  "loot-table": "minecolonies:recipes/large_bottle",
+  "result": "minecolonies:flatbread",
+  "show-tooltip": true
+}

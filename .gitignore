@@ -37,6 +37,17 @@ build/
 # Claude
 .claude/
 
+# MineColonies
+minecolonies/build/
+minecolonies/.gradle/
+
+# Server
+server/forge-*.jar
+server/libraries/
+server/world/
+server/logs/
+server/crash-reports/
+
 # Git
 .git/
 .gitconfig

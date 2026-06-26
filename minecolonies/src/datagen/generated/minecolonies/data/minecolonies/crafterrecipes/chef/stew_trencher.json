@@ -1,0 +1,23 @@
+{
+  "type": "recipe",
+  "crafter": "chef_crafting",
+  "inputs": [
+    {
+      "item": "minecolonies:manchet_bread"
+    },
+    {
+      "item": "minecolonies:tomato"
+    },
+    {
+      "item": "minecolonies:cabbage"
+    },
+    {
+      "count": 2,
+      "item": "minecolonies:onion"
+    }
+  ],
+  "intermediate": "minecraft:air",
+  "min-building-level": 4,
+  "result": "minecolonies:stew_trencher",
+  "show-tooltip": true
+}
