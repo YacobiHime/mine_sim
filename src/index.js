@@ -19,15 +19,21 @@ import { FarmerAgent }  from './agents/FarmerAgent.js'
 import { GuardAgent }   from './agents/GuardAgent.js'
 import { LeaderAgent }  from './agents/LeaderAgent.js'
 import { config }       from './config.js'
+import * as LLMClient    from './llm/LLMClient.js'
 
 // エージェント定義（名前・役職・クラス）
-const AGENT_CONFIGS = config.agents.map(a => ({
-  username: a.username,
-  AgentClass: a.role === 'leader'  ? LeaderAgent  :
-              a.role === 'builder' ? BuilderAgent :
-              a.role === 'farmer'  ? FarmerAgent  :
-              a.role === 'guard'   ? GuardAgent   : LeaderAgent,
-}))
+const AGENT_CONFIGS = config.agents.map(a => {
+  const role = a.role || 'worker'
+  const AgentClass = role === 'leader'  ? LeaderAgent  :
+                    role === 'builder' ? BuilderAgent :
+                    role === 'farmer'  ? FarmerAgent  :
+                    role === 'guard'   ? GuardAgent   : LeaderAgent
+  return {
+    username: a.username,
+    role: role,
+    AgentClass: AgentClass,
+  }
+})
 
 // ---- コロニー共有状態 ----
 const colony = new Colony()
@@ -101,7 +107,15 @@ function createBot(agentConfig, retryCount = 0) {
       // pathfinderプラグインをロード
       await setupPathfinder(bot)
 
-      const agent = new agentConfig.AgentClass(agentConfig.username, bot, colony)
+      // LLMClientをまとめたオブジェクト（LeaderAgent専用）
+      const llmClient = {
+        decideAction: LLMClient.decideAction,
+        generateSpeech: LLMClient.generateSpeech,
+        generateChat: LLMClient.generateChat,
+        generateReaction: LLMClient.generateReaction,
+      }
+
+      const agent = new agentConfig.AgentClass(agentConfig.username, agentConfig.AgentClass === LeaderAgent ? 'leader' : agentConfig.role || 'worker', bot, colony, agentConfig.AgentClass === LeaderAgent ? llmClient : null)
 
       // ゲーム内時間に合わせた sleep/wake
       bot.on('time', () => {
@@ -120,6 +134,11 @@ function createBot(agentConfig, retryCount = 0) {
           { x: pos.x - 10, y: pos.y, z: pos.z },
           { x: pos.x,      y: pos.y, z: pos.z - 10 },
         ])
+      }
+
+      // LeaderAgent はスポーン後に初期化処理
+      if (agent instanceof LeaderAgent) {
+        await agent.onSpawn()
       }
 
       agents.push(agent)

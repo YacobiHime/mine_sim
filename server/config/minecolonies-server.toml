@@ -1,0 +1,18 @@
+[gameplay]
+    # LLMが /mc コマンドを使えるよう有効化
+    canPlayerUseColonyCommands = true
+    canPlayerUseShowColonyInfoCommand = true
+    canPlayerUseAddOfficerCommand = true
+
+    # シミュレーション向け設定
+    turnOffRaiderEvents = false          # レイドを有効（LLMに判断させる）
+    maxCitizens = 50                     # 最大市民数
+    initialCitizenCount = 4             # 初期市民数
+    workerBreakResistance = 100         # 設備破壊しない
+
+    # 1日の長さ（デフォルト = MC時間）
+    nightModeSleepDefault = true
+
+[requestSystem]
+    deliverymanResourceAvailabilitySkipDelay = 5
+    assignmentMode = "BEST"

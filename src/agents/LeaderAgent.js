@@ -1,127 +1,182 @@
 /**
- * LeaderAgent
- * コロニーの指導者。MineColoniesにはプレイヤーが担う役割を
- * LLMエージェントとして自律化したもの。
- * 他エージェントに指示を出し、建築優先度や戦略を決定する。
+ * LeaderAgent.js — LLM指導者（MineColonies操作版）
+ *
+ * プレイヤーの代わりにLLMがコロニーを指揮する。
+ * MineColonies の IColonyManager / ICitizenManager に相当する役割を
+ * チャットコマンド経由で担う。
+ *
+ * 参照した MineColonies ソース:
+ *   CitizenAI.java       → calculateNextState() の優先度構造
+ *   AbstractEntityAIBasic.java → tick() の構造
+ *   CommandColonyInfo.java → /mc colony info の出力形式
  */
-
 import { BaseAgent } from './BaseAgent.js'
-import { decideAction } from '../llm/LLMClient.js'
+import { ColonyBridge } from '../bridge/ColonyBridge.js'
 
 export class LeaderAgent extends BaseAgent {
-  constructor(name, bot, colony) {
-    super(name, 'leader', bot, colony)
-    this.lastDirectiveTime = 0
-    this.directiveInterval = 200 // 200tickごとに指示
-  }
-
-  getSystemPrompt() {
-    return `あなたはMinecraftコロニーの指導者「${this.name}」です。
-あなたの使命はコロニー全体を繁栄させることです。
-農家・建築家・衛兵のエージェントを統率し、コロニーの発展を導いてください。
-食料・木材・安全のバランスを考えて判断してください。
-返答は必ずJSON形式のみにしてください。`
-  }
-
-  getAvailableActions() {
-    const actions = [
-      'コロニーの状況を評価する',
-    ]
-    if (this.colony.inventory.wood < 10) actions.push('木材収集を指示する')
-    if (this.colony.inventory.food < this.colony.agentCount() * 3) actions.push('食料増産を指示する')
-    if (this.colony.isUnderAttack) actions.push('防衛緊急指令を出す')
-    if (this.colony.buildQueue.length === 0) {
-      actions.push('家の建築を命令する')
-      actions.push('農地の建築を命令する')
-      actions.push('倉庫の建築を命令する')
-      actions.push('兵舎の建築を命令する')
+    constructor(name, role, bot, colony, llmClient) {
+        super(name, role, bot, colony)
+        this.bridge = new ColonyBridge(bot)
+        this.llmClient = llmClient
+        this.decisionIntervalTicks = 200    // 200tick（10秒）ごとにLLM判断
+        this.refreshIntervalTicks  = 100    // 100tick（5秒）ごとにコロニー状態更新
+        this.ticksSinceDecision = 0
+        this.ticksSinceRefresh  = 0
+        this.colonyInitialized = false
     }
-    actions.push('全員に休息を命令する')
-    return actions
-  }
 
-  async executeAction(action) {
-    switch (action) {
-      case '家の建築を命令する':
-        this.colony.requestBuild('house')
-        this.speak('建築家よ、家を建てろ！')
-        this._broadcastDirective('builder', '家の建築を急げ')
-        break
-      case '農地の建築を命令する':
-        this.colony.requestBuild('farm')
-        this.speak('農地を整備せよ！')
-        this._broadcastDirective('farmer', '農地を耕し食料を増やせ')
-        break
-      case '倉庫の建築を命令する':
-        this.colony.requestBuild('warehouse')
-        this.speak('倉庫を建設する！')
-        this._broadcastDirective('builder', '倉庫建設を優先せよ')
-        break
-      case '兵舎の建築を命令する':
-        this.colony.requestBuild('barracks')
-        this.speak('兵舎を建設する！')
-        this._broadcastDirective('builder', '兵舎建設を優先せよ')
-        break
-      case '木材収集を指示する':
-        this.speak('建築家よ、木材を集めろ！')
-        this._broadcastDirective('builder', '木材を緊急に集めろ')
-        break
-      case '食料増産を指示する':
-        this.speak('農家よ、食料を増産せよ！')
-        this._broadcastDirective('farmer', '食料が不足している。増産を急げ')
-        break
-      case '防衛緊急指令を出す':
-        this.speak('衛兵よ、警戒を強化せよ！')
-        this._broadcastDirective('guard', '防衛態勢を最大にせよ')
-        break
-      case 'コロニーの状況を評価する':
-        await this._evaluateColony()
-        break
-      case '全員に休息を命令する':
-        this.speak('今日はここまで。全員休息せよ')
-        break
+    // ──────────────────────────────────────────────────
+    // 初期化：スポーン後にタウンホールを設置してコロニーを開始
+    // ──────────────────────────────────────────────────
+
+    async onSpawn() {
+        this.speak('コロニーの設立を開始します')
+        await this._sleep(3000)
+
+        // タウンホール設置（creative モードで直接設置）
+        // MineColonies の TownHallBlock 相当
+        try {
+            await this.bot.chat('/give @s minecolonies:supplycampitem')
+            await this._sleep(500)
+            // プレイヤー足元に置く
+            const pos = this.bot.entity.position.floored()
+            await this.bot.chat(`/setblock ${pos.x} ${pos.y} ${pos.z} minecolonies:townhall`)
+            await this._sleep(2000)
+            await this.bridge.refreshColonyInfo(1)
+            this.colonyInitialized = true
+            this.speak('コロニー設立完了！統治を開始します')
+        } catch (e) {
+            this.speak('コロニー設立に失敗。サーバー側で手動でタウンホールを置いてください')
+            console.error('[LeaderAgent] spawn error:', e.message)
+        }
     }
-    await this._sleep(3000)
-    return true
-  }
 
-  _broadcastDirective(targetRole, directive) {
-    this.colony.issueDirective(this._roleKey(targetRole), directive)
-    this.speak(`${targetRole}へ指令: ${directive}`)
-  }
+    // ──────────────────────────────────────────────────
+    // メインティックループ
+    // CitizenAI.calculateNextState() の優先度構造を参考に
+    // ──────────────────────────────────────────────────
 
-  _roleKey(label) {
-    const map = { '農家': 'farmer', '建築家': 'builder', '衛兵': 'guard' }
-    return map[label] ?? label
-  }
+    async tick() {
+        this.ticksSinceRefresh++
+        this.ticksSinceDecision++
 
-  async _evaluateColony() {
-    const summary = this.colony.getSummary()
-    this.speak('コロニーを評価中...')
-    console.log(`[${this.name}] 評価:\n${summary}`)
+        // 優先度1（毎100tick）: MineColonies 状態を更新
+        if (this.ticksSinceRefresh >= this.refreshIntervalTicks) {
+            this.ticksSinceRefresh = 0
+            await this._refreshState()
+        }
 
-    // 評価に基づいて自動判断
-    if (this.colony.inventory.food < 5) {
-      this.colony.log('指導者判断: 食料危機！農家に増産を命令')
-      this._broadcastDirective('farmer', '緊急！食料が危機的に不足している')
+        // 優先度2（毎200tick）: LLMで次のアクションを決定
+        if (this.ticksSinceDecision >= this.decisionIntervalTicks && !this.llmBusy) {
+            this.ticksSinceDecision = 0
+            await this._decideAndExecute()
+        }
     }
-    if (this.colony.inventory.wood < 10 && this.colony.buildQueue.length > 0) {
-      this.colony.log('指導者判断: 木材不足。建築家に伐採を命令')
-      this._broadcastDirective('builder', '木材を急いで集めろ')
-    }
-    if (this.colony.isUnderAttack) {
-      this.colony.log('指導者判断: 攻撃中！衛兵に防衛を命令')
-      this._broadcastDirective('guard', 'コロニーへの攻撃を排除せよ！')
-    }
-  }
 
-  // 指導者は定期的にコロニー状況を見て自ら判断も行う
-  tick() {
-    super.tick()
-    this.lastDirectiveTime++
-    if (this.lastDirectiveTime >= this.directiveInterval) {
-      this.lastDirectiveTime = 0
-      this._evaluateColony().catch(() => {})
+    // ──────────────────────────────────────────────────
+    // MineColonies 状態の更新
+    // ──────────────────────────────────────────────────
+
+    async _refreshState() {
+        try {
+            await this.bridge.refreshColonyInfo(1)
+            await this.bridge.refreshCitizenList(1)
+            // JS側のColonyにもミラーリング（他エージェントから参照できるよう）
+            const s = this.bridge.getState()
+            this.colony.mcState = s
+        } catch (e) {
+            // 更新失敗はスキップ（次回に持ち越し）
+        }
     }
-  }
+
+    // ──────────────────────────────────────────────────
+    // LLMによる意思決定 → MineColonies コマンド実行
+    // ──────────────────────────────────────────────────
+
+    async _decideAndExecute() {
+        if (this.llmBusy) return
+        this.llmBusy = true
+
+        try {
+            const situation = this.bridge.toPromptSummary()
+            const actions = this._getAvailableActions()
+            const result = await this.llmClient.decideAction(
+                this.getSystemPrompt(),
+                situation,
+                actions
+            )
+
+            this.speak(result.speech ?? '考え中...')
+            await this._executeAction(result.action)
+        } catch (e) {
+            console.error('[LeaderAgent] LLM error:', e.message)
+        } finally {
+            this.llmBusy = false
+        }
+    }
+
+    getSystemPrompt() {
+        return `あなたはMinecraftのコロニーを統治するLLM指導者です。
+MineColonies modが動作しているサーバーに接続しており、
+/mc コマンドを通じてコロニーを管理します。
+市民の幸福度・健康・食料を維持しつつ、コロニーを発展させてください。
+レイドが来たら防衛を優先してください。
+返答は必ずJSON形式: {"action": "アクション名", "speech": "一言セリフ"}`
+    }
+
+    _getAvailableActions() {
+        const s = this.bridge.getState()
+        const actions = ['コロニーの状態を確認する']
+
+        if (!s.name) {
+            return ['コロニーを設立する']
+        }
+
+        // 市民数が少ない → 採用
+        if (s.citizenCount < s.maxCitizens) {
+            actions.push('新しい市民をスポーンさせる(/mc citizen spawnnew 1)')
+        }
+
+        // レイド中 → 防衛
+        if (s.isRaided) {
+            actions.push('防衛指令を出す(/mc colony raid 1 now で追加レイドを防ぐ)')
+            actions.push('全市民に撤退を命令する')
+        }
+
+        // 建物関連
+        actions.push('建物の建設を指示する（/mc コマンドで建設依頼）')
+        actions.push('市民の職業割り当てを最適化する')
+        actions.push('コロニーに挨拶する')
+
+        return actions
+    }
+
+    async _executeAction(action) {
+        const s = this.bridge.getState()
+
+        if (action?.includes('市民をスポーン') || action?.includes('spawnnew')) {
+            await this.bot.chat(`/mc citizen spawnnew ${s.id ?? 1}`)
+            this.colony.log('[指導者] 市民を召喚しました')
+
+        } else if (action?.includes('コロニーの状態')) {
+            await this.bridge.refreshColonyInfo(s.id ?? 1)
+            await this.bridge.refreshCitizenList(s.id ?? 1)
+            this.colony.log('[指導者] コロニー状態を更新しました')
+
+        } else if (action?.includes('防衛') || action?.includes('レイド')) {
+            // 衛兵に優先的にアラートを送る（チャット経由）
+            await this.bot.chat('コロニー防衛！全員戦闘準備！')
+            this.colony.isUnderAttack = true
+            this.colony.log('[指導者] 防衛指令を発令しました')
+
+        } else if (action?.includes('建設')) {
+            // MineColonies のビルダーボットへの依頼
+            // 実際の建設は MineColonies の EntityAIStructureBuilder が行う
+            await this.bot.chat('コロニーの建設を進めてください')
+            this.colony.log('[指導者] 建設指示を送りました')
+
+        } else if (action?.includes('挨拶')) {
+            await this.bot.chat(`こんにちは！私はコロニーの指導者です。${s.name ?? 'このコロニー'}をよろしく！`)
+        }
+    }
 }

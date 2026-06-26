@@ -1,85 +1,122 @@
-# Colony Simulation
+# mine_sim × MineColonies 統合プロジェクト
 
-MineColonies のアーキテクチャを参考に、LLM（Ollama）で行動決定・セリフ生成を行う
-Minecraft コロニーシミュレーション。
+MineColonies（Forge mod）と mine_sim（mineflayer ボット）を統合し、LLMがコロニーを指揮するシミュレーションシステム。
+
+## 概要
+
+このプロジェクトは以下の2つのシステムを統合しています：
+
+- **MineColonies**: MinecraftのForge modで、コロニー建設・市民管理・自動化を行うJavaベースのシステム
+- **mine_sim**: Node.js/mineflayerベースのLLM指導者ボット
+
+LLM指導者がMineColoniesの `/mc` コマンドを通じてコロニーを運営します。
 
 ## 構成
 
 ```
-src/
-├── index.js                   # エントリーポイント（全ボット起動・メインループ）
-├── colony/
-│   └── Colony.js              # コロニー共有状態（IColony相当）
-├── statemachine/
-│   └── StateMachine.js        # ティックレートステートマシン（TickRateStateMachine相当）
-├── llm/
-│   └── LLMClient.js           # Ollamaラッパー（行動決定 + セリフ生成）
-└── agents/
-    ├── BaseAgent.js           # 全エージェント基底クラス（AbstractJob + AbstractEntityAIBasic相当）
-    ├── BuilderAgent.js        # 建築家（EntityAIStructureBuilder相当）
-    ├── FarmerAgent.js         # 農家（EntityAIWorkFarmer相当）
-    ├── GuardAgent.js          # 衛兵（AbstractEntityAIGuard + AttackMoveAI相当）
-    └── LeaderAgent.js         # 指導者（プレイヤー役をLLMが担当）
+mine_sim/
+├── minecolonies/           ← MineColonies ソース（22,382ファイル）
+│   └── src/main/java/     ← コロニーロジック全体
+├── server/                 ← Forgeサーバー実行環境
+│   ├── setup.sh           ← サーバーセットアップスクリプト
+│   ├── start.sh           ← サーバー起動スクリプト
+│   └── config/            ← MineColonies 設定
+├── src/
+│   ├── bridge/
+│   │   └── ColonyBridge.js ← MineColonies ↔ JS ブリッジ
+│   ├── agents/
+│   │   ├── BaseAgent.js
+│   │   ├── LeaderAgent.js  ← LLM指導者（MineColonies操作版）
+│   │   ├── BuilderAgent.js
+│   │   ├── FarmerAgent.js
+│   │   └── GuardAgent.js
+│   ├── colony/
+│   │   └── Colony.js
+│   ├── statemachine/
+│   │   └── StateMachine.js
+│   ├── llm/
+│   │   └── LLMClient.js
+│   ├── config.js
+│   └── index.js
+└── package.json
 ```
 
-## MineColonies との対応関係
+## 動作イメージ
 
-| MineColonies | このプロジェクト | 役割 |
-|---|---|---|
-| `TickRateStateMachine` | `StateMachine.js` | tick毎の状態遷移エンジン |
-| `IColony` | `Colony.js` | コロニー共有状態 |
-| `AbstractJob` | `BaseAgent.js` | エージェント基底 |
-| `EntityAIWorkFarmer` | `FarmerAgent.js` | 農業AI |
-| `EntityAIStructureBuilder` | `BuilderAgent.js` | 建築AI |
-| `AbstractEntityAIGuard + AttackMoveAI` | `GuardAgent.js` | 防衛AI |
-| `ThreatTable` | `GuardAgent._threatTable` | 脅威テーブル |
-| `CitizenAI.calculateNextState()` | `BaseAgent._triggerDecision()` | 行動決定（LLM） |
-| プレイヤー | `LeaderAgent.js` | 指導者AI |
-
-## LLMの役割
-
-MineColonies ではコードで行動を決定しますが、このシミュレーションでは：
-
-1. **行動決定**：`decideAction()` でLLMに現在状況と選択肢を渡し、次のアクションをJSON形式で取得
-2. **セリフ生成**：各アクションの実行時に状況に応じたセリフをLLMが生成
-3. **指導者判断**：LeaderAgentがコロニー全体の戦略をLLMで決定し他エージェントに指示
+```
+[Forgeサーバー]                         [mine_sim / Node.js]
+  MineColonies mod が動作           →   mineflayer ボット（Leader_Alex）が接続
+  市民AIが自律的にコロニーを運営     ←   LLMが /mc コマンドで指揮
+  建物建設・農業・警備               →   チャット出力を ColonyBridge が解析
+  レイドイベントが発生               ←   LeaderAgent が LLM判断で対応指令
+```
 
 ## セットアップ
+
+### 1. MineColonies Forge サーバーのセットアップ
+
+```bash
+# Java 17 が必要
+java -version
+
+# サーバーセットアップ（Forge + MineColonies を自動ダウンロード）
+cd server
+bash setup.sh
+
+# サーバー起動
+bash start.sh
+```
+
+### 2. mine_sim の起動
 
 ```bash
 # 依存パッケージのインストール
 npm install
 
-# Minecraft サーバーとOllama の設定
-export MC_HOST=192.168.15.10
+# 環境変数設定
+export MC_HOST=localhost
 export MC_PORT=25565
-export OLLAMA_URL=http://192.168.15.150:11434/v1
+export OLLAMA_URL=http://localhost:11434/v1
 export OLLAMA_MODEL=gemma4:e4b
 
 # 起動
 npm start
 ```
 
-## 拡張方法
+## MineColonies コマンド対応
 
-### 新しい職種を追加する
+ColonyBridge は以下の `/mc` コマンド出力を解析します：
 
-1. `src/agents/BaseAgent.js` を継承した新しいクラスを作成
-2. `getSystemPrompt()` で人格を定義
-3. `getAvailableActions()` で取れる行動リストを返す
-4. `executeAction(action)` で各行動の実装を書く
-5. `src/index.js` の `AGENT_CONFIGS` に追加
+| コマンド | 取得情報 |
+|---|---|
+| `/mc colony info <id>` | コロニー名、市民数、中心座標 |
+| `/mc citizen list <colonyId>` | 市民名・職業リスト |
+| `/mc citizen info <id> <cId>` | 個別市民の状態（健康・幸福度） |
+| `/mc colony raid <id> tonight` | レイドをトリガー |
 
-### 行動の実装を本格化する
+## LLM指導者の機能
 
-- `BuilderAgent._build()` → Structurize連携で実際のNBTを配置
-- `GuardAgent._attackTarget()` → mineflayer-pathfinderで実際に追跡・攻撃
-- `FarmerAgent._hoeField()` → 実際のブロック操作で農地を耕す
+LeaderAgent は以下の判断を行います：
+
+- コロニー状態の定期更新（5秒ごと）
+- LLMによる戦略判断（10秒ごと）
+- 市民のスポーン
+- 建設指示
+- 防衛指令（レイド時）
+
+## 参照した MineColonies ソース
+
+| ファイル | 参照目的 |
+|---|---|
+| `CitizenAI.java` | 状態遷移の優先度構造 |
+| `CommandColonyInfo.java` | コロニー情報コマンドの出力形式 |
+| `CommandCitizenList.java` | 市民リストの出力形式 |
+| `AbstractEntityAIBasic.java` | tick() 構造・状態遷移 |
+| `ThreatTable.java` | 脅威テーブルの距離係数 |
 
 ## プレイヤーからの指示
 
-ゲーム内チャットで指示を送ると、Leaderエージェントが受け取り
-コロニーログに追記。次回のLLM判断時に考慮される。
+ゲーム内チャットで指示を送ると、Leaderエージェントが受け取りコロニーログに追記。
 
 例：
 ```
@@ -87,3 +124,10 @@ npm start
 食料が足りない、農業を優先しろ
 西側を防衛強化せよ
 ```
+
+## 今後の拡張
+
+- MineColonies パケットプロトコルへの直接接続
+- 建物スキャンによる状態推定精度向上
+- Structurize 連携による建設完全自動化
+- マルチコロニー管理
