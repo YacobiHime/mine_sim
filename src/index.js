@@ -15,6 +15,7 @@
 
 import 'dotenv/config'
 import mineflayer from 'mineflayer'
+import minecraftProtocolForge from 'minecraft-protocol-forge'
 import { Colony }       from './colony/Colony.js'
 import { BuilderAgent } from './agents/BuilderAgent.js'
 import { FarmerAgent }  from './agents/FarmerAgent.js'
@@ -156,9 +157,20 @@ function createBot(agentConfig, retryCount = 0) {
       host:     config.server.host,
       port:     config.server.port,
       username: agentConfig.username,
-      version:  config.server.version,
+      // MineColonies/Structurize/Domum Ornamentum はForgeの必須ネットワーク
+      // チャンネルを要求するため、固定バージョンではなく version:false で
+      // サーバーへ事前pingし、Forge(FML2)であるかを自動判定させる。
+      version:  false,
       auth:     'offline',  // 認証なしモード
     })
+
+    // サーバーがForge(FML2)を要求してきた場合に、サーバー側が提示する
+    // mod一覧・チャンネル一覧をそのまま「持っている」と返してハンドシェイクを
+    // パスする（実際にmodを読み込むわけではないが、ログイン段階の
+    // チャンネル登録要求はこれで満たせる）。
+    // forgeMods/channels/registries を省略すると、サーバーが ping で返した
+    // ものをそのまま反映する。
+    minecraftProtocolForge.autoVersionForge(bot._client, {})
 
     bot.on('spawn', async () => {
       console.log(`[System] ${agentConfig.username} がスポーンしました`)
