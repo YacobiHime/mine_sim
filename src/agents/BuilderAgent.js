@@ -66,6 +66,8 @@ export class BuilderAgent extends BaseAgent {
 
   async _gatherWood() {
     this.speak('木材を集めに行くぞ')
+    console.log(`[${this.name}] 木を探します...`)
+
     const treeBlock = this.bot.findBlock({
       matching: block => block.name.includes('log'),
       maxDistance: 32,
@@ -73,27 +75,48 @@ export class BuilderAgent extends BaseAgent {
 
     if (!treeBlock) {
       this.speak('近くに木がない…もっと探そう')
+      console.log(`[${this.name}] 木が見つかりませんでした`)
       await this._sleep(2000)
       return false
     }
 
+    console.log(`[${this.name}] 木を発見: ${treeBlock.name} at ${treeBlock.position}`)
+
     try {
-      if (this.bot.pathfinder && global.mineflayerPathfinderGoals) {
-        const { GoalBlock } = global.mineflayerPathfinderGoals
-        await this.bot.pathfinder.goto(
-          new GoalBlock(
-            treeBlock.position.x, treeBlock.position.y, treeBlock.position.z
-          )
-        )
+      // pathfinder の状態を確認
+      if (!this.bot.pathfinder) {
+        console.warn(`[${this.name}] pathfinder が有効ではありません`)
+        this.speak('移動機能がありません…')
+        return false
       }
+
+      if (!global.mineflayerPathfinderGoals) {
+        console.warn(`[${this.name}] pathfinder goals が利用できません`)
+        this.speak('移動機能がありません…')
+        return false
+      }
+
+      const { GoalBlock } = global.mineflayerPathfinderGoals
+      console.log(`[${this.name}] 木へ移動開始...`)
+
+      await this.bot.pathfinder.goto(
+        new GoalBlock(
+          treeBlock.position.x, treeBlock.position.y, treeBlock.position.z
+        )
+      )
+
+      console.log(`[${this.name}] 木に到着、伐採開始...`)
       await this.bot.dig(treeBlock)
       this.woodInHand += 1
       this.colony.log(`${this.name}が木材を伐採 (手持ち:${this.woodInHand})`)
       this.speak(`木を倒した！(手持ち${this.woodInHand}本)`)
+      console.log(`[${this.name}] 伐採完了`)
+      return true
     } catch (err) {
-      this.speak('木に近づけなかった')
+      console.error(`[${this.name}] 伐採失敗:`, err.message)
+      this.speak(`木を切れませんでした: ${err.message}`)
+      return false
     }
-    return true
   }
 
   async _returnWood() {

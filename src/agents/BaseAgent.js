@@ -109,7 +109,7 @@ export class BaseAgent {
     // 注意: DECIDING状態でLLMを呼び、完了次第EXECUTINGに遷移する
     this.sm.addTransition(
       CommonState.IDLE,
-      () => !this.llmBusy && !this.isSleeping,
+      () => !this.llmBusy && !this.isSleeping && this.sm.getState() === CommonState.IDLE,
       () => {
         this._triggerDecision()
         return CommonState.DECIDING
@@ -179,12 +179,20 @@ export class BaseAgent {
   // ---- LLM行動決定 ----
 
   async _triggerDecision() {
-    if (this.llmBusy) return
+    if (this.llmBusy) {
+      console.log(`[${this.name}] LLM呼び出し中スキップ`)
+      return
+    }
     this.llmBusy = true
+    console.log(`[${this.name}] LLMに行動決定を問い合わせ...`)
+
     try {
       const situation = this._buildSituationPrompt()
       const choices   = this.getAvailableActions()
+      console.log(`[${this.name}] 選択肢: ${choices.join(', ')}`)
+
       const result    = await decideAction(this.getSystemPrompt(), situation, choices)
+      console.log(`[${this.name}] LLM応答: action=${result.action}, speech=${result.speech}`)
 
       this.speak(result.speech)
       this.currentTask = result.action
@@ -193,9 +201,12 @@ export class BaseAgent {
       this.sm.setState(CommonState.EXECUTING)
       this.llmBusy = false
 
+      console.log(`[${this.name}] 行動実行開始: ${result.action}`)
+
       // 行動実行（非同期、完了したらIDLEへ）
       this.executeAction(result.action)
-        .then(() => {
+        .then((success) => {
+          console.log(`[${this.name}] 行動完了: ${result.action}, 成功: ${success}`)
           if (this.sm.getState() === CommonState.EXECUTING) {
             this.sm.setState(CommonState.IDLE)
           }

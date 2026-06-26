@@ -73,12 +73,20 @@ export class GuardAgent extends BaseAgent {
   }
 
   async _scanThreats() {
+    console.log(`[${this.name}] 脅威スキャン開始...`)
+
+    // 全エンティティ数を確認
+    const allEntities = Object.values(this.bot.entities)
+    console.log(`[${this.name}] 全エンティティ数: ${allEntities.length}`)
+
     // ThreatTable更新 - 周囲の敵エンティティを検索
-    const hostiles = Object.values(this.bot.entities).filter(e =>
+    const hostiles = allEntities.filter(e =>
       e.type === 'mob' &&
       ['zombie', 'skeleton', 'creeper', 'spider', 'witch', 'pillager'].includes(e.name) &&
       e.position?.distanceTo(this.bot.entity.position) < 20
     )
+
+    console.log(`[${this.name}] 敵対的Mob数: ${hostiles.length}`)
 
     // 脅威テーブルに追加・更新
     for (const mob of hostiles) {
@@ -94,6 +102,7 @@ export class GuardAgent extends BaseAgent {
         this.threatTable.push(entry)
         this.speak(`${mob.name}を発見！脅威度${entry.threat}`)
         this.colony.log(`${this.name}が${mob.name}を発見`)
+        console.log(`[${this.name}] ${mob.name} 発見！距離: ${dist}`)
       }
     }
 
@@ -109,6 +118,7 @@ export class GuardAgent extends BaseAgent {
       this.threatTable.sort((a, b) => b.threat - a.threat)
       this.target = this.threatTable[0].entity
       this.colony.isUnderAttack = true
+      console.log(`[${this.name}] 脅威ターゲット設定: ${this.target.name}`)
     } else {
       this.target = null
       this.colony.isUnderAttack = false

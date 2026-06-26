@@ -49,29 +49,35 @@ let   tickCounter = 0
  * pathfinder の初期化を共通関数化
  */
 async function setupPathfinder(bot) {
+  console.log(`[${bot.username}] pathfinder 初期化開始...`)
   try {
     // mineflayer-pathfinder を ESM から動的にインポート
     const pathfinderModule = await import('mineflayer-pathfinder')
     const { pathfinder, Movements, goals } = pathfinderModule
+    console.log(`[${bot.username}] pathfinder モジュール読み込み成功`)
 
     // プラグインをロード（mineflayer 4.x 方式）
     bot.loadPlugin(pathfinder)
+    console.log(`[${bot.username}] pathfinder プラグインロード成功`)
 
     // minecraft-data を取得
     const mcDataModule = await import('minecraft-data')
     const mcData = mcDataModule.default(bot.version)
+    console.log(`[${bot.username}] minecraft-data バージョン: ${bot.version}`)
 
     // Movements を設定
     const movements = new Movements(bot, mcData)
     bot.pathfinder.setMovements(movements)
+    console.log(`[${bot.username}] Movements 設定完了`)
 
     // goals をグローバルに設定（各エージェントから使用可能に）
     global.mineflayerPathfinderGoals = goals
+    console.log(`[${bot.username}] pathfinder 初期化完了`)
 
-    console.log(`[${bot.username}] pathfinder 初期化成功`)
     return true
   } catch (e) {
-    console.warn(`[${bot.username}] pathfinder 初期化失敗:`, e.message)
+    console.error(`[${bot.username}] pathfinder 初期化失敗:`, e.message)
+    console.error(e.stack)
     return false
   }
 }
