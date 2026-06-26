@@ -5,7 +5,7 @@
  */
 
 import { StateMachine } from '../statemachine/StateMachine.js'
-import { decideAction, generateSpeech } from '../llm/LLMClient.js'
+import { decideAction, generateSpeech, generateChat, generateReaction } from '../llm/LLMClient.js'
 
 // MineColonies の AIWorkerState に相当する共通ステート
 export const CommonState = {
@@ -106,25 +106,16 @@ export class BaseAgent {
     )
 
     // IDLE → DECIDING（10tickごとに次の行動を判断）優先度0（通常）
+    // 注意: DECIDING状態でLLMを呼び、完了次第EXECUTINGに遷移する
     this.sm.addTransition(
       CommonState.IDLE,
-      () => !this.llmBusy,
+      () => !this.llmBusy && !this.isSleeping,
       () => {
         this._triggerDecision()
         return CommonState.DECIDING
       },
       10,
       0  // 通常優先度
-    )
-
-    // DECIDING → IDLE（LLM応答待ち）
-    // 注意: 優先度を低くして、EXECUTING移行後は発火しないようにする
-    this.sm.addTransition(
-      CommonState.DECIDING,
-      () => !this.llmBusy,
-      () => CommonState.IDLE,
-      5,
-      -1  // 最低優先度（EXECUTING移行後は発火しない）
     )
 
     // EATING
@@ -197,9 +188,10 @@ export class BaseAgent {
 
       this.speak(result.speech)
       this.currentTask = result.action
-      // 先にEXECUTINGにしてからllmBusyをfalseにする
+
+      // DECIDING から EXECUTING に遷移
       this.sm.setState(CommonState.EXECUTING)
-      this.llmBusy = false  // falseにした後にexecuteAction
+      this.llmBusy = false
 
       // 行動実行（非同期、完了したらIDLEへ）
       this.executeAction(result.action)
@@ -217,7 +209,6 @@ export class BaseAgent {
       this.llmBusy = false
       this.sm.setState(CommonState.IDLE)
     }
-    // finally で llmBusy = false を消す（上で制御するため）
   }
 
   _buildSituationPrompt() {
@@ -251,6 +242,62 @@ export class BaseAgent {
     console.log(`[${this.name}] 💬 ${text}`)
   }
 
+  /**
+   * 他エージェントと会話する
+   * @param {BaseAgent} target 会話相手
+   * @param {string} message 自分の発言
+   */
+  async chatWith(target, message = null) {
+    if (!target || target === this) return
+
+    const context = `コロニー状況: ${this.colony.getSummary()}`
+
+    if (message) {
+      // 自分が発言
+      this.speak(message)
+
+      // 相手が反応（少し遅延）
+      setTimeout(async () => {
+        try {
+          const reply = await generateChat(
+            target.name, target.role,
+            this.name, this.role,
+            context, message
+          )
+          target.speak(reply)
+        } catch (e) {
+          console.warn(`Chat from ${this.name} to ${target.name} failed:`, e.message)
+        }
+      }, 1000 + Math.random() * 2000)
+    } else {
+      // 相手に話しかけてもらう
+      try {
+        const firstMessage = await generateChat(
+          target.name, target.role,
+          this.name, this.role,
+          context, null
+        )
+        target.speak(firstMessage)
+      } catch (e) {
+        console.warn(`Chat initiation failed:`, e.message)
+      }
+    }
+  }
+
+  /**
+   * 状況に応じた自然な発話を生成
+   */
+  async reactTo(event, context = '') {
+    try {
+      const reaction = await generateReaction(
+        this.name, this.role, event, context
+      )
+      this.speak(reaction)
+    } catch (e) {
+      console.warn(`Reaction generation failed for ${this.name}:`, e.message)
+    }
+  }
+
   _posStr() {
     const p = this.bot.entity?.position
     return p ? `(${Math.floor(p.x)}, ${Math.floor(p.y)}, ${Math.floor(p.z)})` : '不明'
@@ -265,5 +312,10 @@ export class BaseAgent {
   tick() {
     this.sm.tick()
     this.hunger = Math.max(0, this.hunger - 0.01)
+
+    // デバッグ: 100tickごとに状態を出力
+    if (this.sm.getTickCount() % 100 === 0) {
+      console.log(`[${this.name}] 状態: ${this.sm.getState()}, llmBusy: ${this.llmBusy}, isNight: ${this.isNight}`)
+    }
   }
 }

@@ -50,11 +50,25 @@ let   tickCounter = 0
  */
 async function setupPathfinder(bot) {
   try {
-    const { pathfinder, Movements } = await import('mineflayer-pathfinder')
+    // mineflayer-pathfinder を ESM から動的にインポート
+    const pathfinderModule = await import('mineflayer-pathfinder')
+    const { pathfinder, Movements, goals } = pathfinderModule
+
+    // プラグインをロード（mineflayer 4.x 方式）
     bot.loadPlugin(pathfinder)
-    const mcData = (await import('minecraft-data')).default(bot.version)
+
+    // minecraft-data を取得
+    const mcDataModule = await import('minecraft-data')
+    const mcData = mcDataModule.default(bot.version)
+
+    // Movements を設定
     const movements = new Movements(bot, mcData)
     bot.pathfinder.setMovements(movements)
+
+    // goals をグローバルに設定（各エージェントから使用可能に）
+    global.mineflayerPathfinderGoals = goals
+
+    console.log(`[${bot.username}] pathfinder 初期化成功`)
     return true
   } catch (e) {
     console.warn(`[${bot.username}] pathfinder 初期化失敗:`, e.message)
@@ -146,6 +160,7 @@ function createBot(agentConfig, retryCount = 0) {
 // 全エージェントを毎tick更新し、コロニー状態も更新する。
 function startColonyLoop() {
   const TICK_MS = config.colony.tickMs
+  let lastChatTime = 0
 
   setInterval(() => {
     tickCounter++
@@ -162,6 +177,25 @@ function startColonyLoop() {
     // statsPrintInterval tickごとに状態サマリーを出力
     if (tickCounter % config.colony.statsPrintInterval === 0) {
       console.log('\n' + colony.getSummary() + '\n')
+    }
+
+    // 200tickごとにエージェント同士の会話イベント
+    if (tickCounter - lastChatTime > 200 && agents.length >= 2) {
+      lastChatTime = tickCounter
+      // ランダムに2人を選んで会話
+      const speaker = agents[Math.floor(Math.random() * agents.length)]
+      const listener = agents.filter(a => a !== speaker)[Math.floor(Math.random() * (agents.length - 1))]
+      if (speaker && listener && !speaker.llmBusy && !listener.llmBusy) {
+        // 会話のトピックを決定
+        const topics = [
+          '仕事の進捗について',
+          'コロニーの将来について',
+          '天気について',
+          '暇つぶし',
+        ]
+        const topic = topics[Math.floor(Math.random() * topics.length)]
+        speaker.chatWith(listener, `${topic}について話そうか`)
+      }
     }
   }, TICK_MS)
 }

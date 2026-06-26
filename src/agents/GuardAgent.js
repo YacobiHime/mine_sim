@@ -127,11 +127,14 @@ export class GuardAgent extends BaseAgent {
     }
 
     try {
-      await this.bot.pathfinder?.goto(
-        new (await import('mineflayer-pathfinder')).goals.GoalNear(
-          this.target.position.x, this.target.position.y, this.target.position.z, 2
+      if (this.bot.pathfinder && global.mineflayerPathfinderGoals) {
+        const { GoalNear } = global.mineflayerPathfinderGoals
+        await this.bot.pathfinder.goto(
+          new GoalNear(
+            this.target.position.x, this.target.position.y, this.target.position.z, 2
+          )
         )
-      )
+      }
       await this.bot.attack(this.target)
       this.speak(`${this.target.name}を攻撃！`)
 
@@ -170,9 +173,12 @@ export class GuardAgent extends BaseAgent {
     this.patrolIndex++
     this.speak(`巡回地点${this.patrolIndex}へ`)
     try {
-      await this.bot.pathfinder?.goto(
-        new (await import('mineflayer-pathfinder')).goals.GoalBlock(point.x, point.y, point.z)
-      )
+      if (this.bot.pathfinder && global.mineflayerPathfinderGoals) {
+        const { GoalBlock } = global.mineflayerPathfinderGoals
+        await this.bot.pathfinder.goto(
+          new GoalBlock(point.x, point.y, point.z)
+        )
+      }
     } catch {}
     return true
   }

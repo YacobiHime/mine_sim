@@ -78,11 +78,14 @@ export class BuilderAgent extends BaseAgent {
     }
 
     try {
-      await this.bot.pathfinder?.goto(
-        new (await import('mineflayer-pathfinder')).goals.GoalBlock(
-          treeBlock.position.x, treeBlock.position.y, treeBlock.position.z
+      if (this.bot.pathfinder && global.mineflayerPathfinderGoals) {
+        const { GoalBlock } = global.mineflayerPathfinderGoals
+        await this.bot.pathfinder.goto(
+          new GoalBlock(
+            treeBlock.position.x, treeBlock.position.y, treeBlock.position.z
+          )
         )
-      )
+      }
       await this.bot.dig(treeBlock)
       this.woodInHand += 1
       this.colony.log(`${this.name}が木材を伐採 (手持ち:${this.woodInHand})`)
@@ -175,10 +178,10 @@ export class BuilderAgent extends BaseAgent {
     })
     if (!stoneBlock) { this.speak('石が見つからない'); return false }
     try {
-      if (this.bot.pathfinder) {
-        const { goals } = await import('mineflayer-pathfinder')
+      if (this.bot.pathfinder && global.mineflayerPathfinderGoals) {
+        const { GoalBlock } = global.mineflayerPathfinderGoals
         await this.bot.pathfinder.goto(
-          new goals.GoalBlock(stoneBlock.position.x, stoneBlock.position.y, stoneBlock.position.z)
+          new GoalBlock(stoneBlock.position.x, stoneBlock.position.y, stoneBlock.position.z)
         )
       }
       await this.bot.dig(stoneBlock)
