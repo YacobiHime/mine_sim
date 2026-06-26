@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Cache
+.cache/
+.parcel-cache/
+
+# Claude
+.claude/
+
+# Git
+.git/
+.gitconfig
+.git/config
+.gitattributes
+*.orig
+*.rej
+.git_merge_*
+*.patch
