@@ -5,6 +5,9 @@
  */
 
 export const config = {
+  // サーバーレスモード：実際のMinecraftサーバーに接続せずシミュレーションのみ動作
+  serverless: process.env.SERVERLESS === 'true' || process.env.MC_HOST === undefined,
+
   server: {
     host:    process.env.MC_HOST    ?? '192.168.15.10',
     port:    parseInt(process.env.MC_PORT ?? '25565'),

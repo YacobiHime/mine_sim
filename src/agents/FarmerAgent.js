@@ -14,8 +14,8 @@ const FarmerState = {
 }
 
 export class FarmerAgent extends BaseAgent {
-  constructor(name, bot, colony) {
-    super(name, 'farmer', bot, colony)
+  constructor(name, role, bot, colony) {
+    super(name, role || 'farmer', bot, colony)
     this.harvestedWheat = 0
     this.seedStock = 2        // 初期種2個
     this.fieldReady = false   // 農地が準備済みか

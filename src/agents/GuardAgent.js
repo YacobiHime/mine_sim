@@ -16,8 +16,8 @@ class ThreatEntry {
 }
 
 export class GuardAgent extends BaseAgent {
-  constructor(name, bot, colony) {
-    super(name, 'guard', bot, colony)
+  constructor(name, role, bot, colony) {
+    super(name, role || 'guard', bot, colony)
     this.patrolIndex  = 0
     this.patrolPoints = []  // 巡回ポイント（設定で追加可）
     this.threatTable  = []  // ThreatEntry[]

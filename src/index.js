@@ -5,6 +5,7 @@
  * 各エージェントボットを生成し、コロニーループを開始する。
  *
  * 環境変数:
+ *   SERVERLESS       サーバーレスモード (true/false) - MC_HOST未設定時は自動true
  *   MC_HOST         Minecraftサーバーアドレス (default: 192.168.15.10)
  *   MC_PORT         ポート番号 (default: 25565)
  *   MC_VERSION      バージョン (default: 1.21.4)
@@ -12,6 +13,7 @@
  *   OLLAMA_MODEL    使用モデル (default: gemma4:e4b)
  */
 
+import 'dotenv/config'
 import mineflayer from 'mineflayer'
 import { Colony }       from './colony/Colony.js'
 import { BuilderAgent } from './agents/BuilderAgent.js'
@@ -20,6 +22,63 @@ import { GuardAgent }   from './agents/GuardAgent.js'
 import { LeaderAgent }  from './agents/LeaderAgent.js'
 import { config }       from './config.js'
 import * as LLMClient    from './llm/LLMClient.js'
+
+// ---- サーバーレスモード用モックボット ----
+class MockBot {
+  constructor(username) {
+    this.username = username
+    // floored()メソッドを持つpositionオブジェクト
+    this.entity = {
+      position: {
+        x: 0, y: 64, z: 0,
+        floored: () => ({ x: 0, y: 64, z: 0 })
+      }
+    }
+    this.time = { timeOfDay: 0 }
+    this._listeners = {}
+    this._chatQueue = []
+    this._controls = {}
+  }
+
+  on(event, callback) {
+    if (!this._listeners[event]) this._listeners[event] = []
+    this._listeners[event].push(callback)
+    return this
+  }
+
+  emit(event, ...args) {
+    if (this._listeners[event]) {
+      this._listeners[event].forEach(cb => cb(...args))
+    }
+  }
+
+  chat(message) {
+    this._chatQueue.push(message)
+    console.log(`[${this.username}] (chat): ${message}`)
+  }
+
+  // pathfinder用（ダミー）
+  pathfinder = {
+    setMovements: () => {},
+    setGoal: () => {},
+  }
+
+  // setControlState用（移動制御）
+  setControlState(control, value) {
+    this._controls[control] = value
+  }
+
+  // 時間経過のシミュレーション
+  simulateTick() {
+    this.time.timeOfDay = (this.time.timeOfDay + 10) % 24000
+    this.emit('time')
+  }
+
+  async spawn() {
+    console.log(`[Serverless] ${this.username} をシミュレーション開始`)
+    this.emit('spawn')
+  }
+}
 
 // エージェント定義（名前・役職・クラス）
 const AGENT_CONFIGS = config.agents.map(a => {
@@ -225,22 +284,70 @@ function startColonyLoop() {
   }, TICK_MS)
 }
 
+/**
+ * サーバーレスモード用の簡易エージェント作成
+ */
+async function createMockAgent(agentConfig) {
+  const mockBot = new MockBot(agentConfig.username)
+
+  // LLMClientをまとめたオブジェクト
+  const llmClient = {
+    decideAction: LLMClient.decideAction,
+    generateSpeech: LLMClient.generateSpeech,
+    generateChat: LLMClient.generateChat,
+    generateReaction: LLMClient.generateReaction,
+  }
+
+  const agent = new agentConfig.AgentClass(
+    agentConfig.username,
+    agentConfig.role || 'worker',
+    mockBot,
+    colony,
+    agentConfig.AgentClass === LeaderAgent ? llmClient : null
+  )
+
+  // スポーンイベントを発火
+  await mockBot.spawn()
+  if (agent instanceof LeaderAgent) {
+    await agent.onSpawn()
+  }
+
+  agents.push(agent)
+  return agent
+}
+
 // ---- 起動シーケンス ----
 async function main() {
   console.log('=== Colony Simulation 起動 ===')
-  console.log(`サーバー: ${config.server.host}:${config.server.port}  バージョン: ${config.server.version}`)
-  console.log(`エージェント数: ${config.agents.length}`)
-  console.log(`Ollama: ${config.ollama.url}`)
-  console.log('==============================\n')
 
-  // 順番に接続（サーバー負荷軽減のため5秒ずつ間隔）
-  for (const agentConfig of AGENT_CONFIGS) {
-    await createBot(agentConfig)
-    await new Promise(r => setTimeout(r, 5000))
+  if (config.serverless) {
+    console.log('🖥️  サーバーレスモード: 実際のMinecraftサーバーには接続しません')
+    console.log('📊 シミュレーションのみ実行')
+    console.log(`エージェント数: ${config.agents.length}`)
+    console.log(`Ollama: ${config.ollama.url}`)
+    console.log('==============================\n')
+
+    for (const agentConfig of AGENT_CONFIGS) {
+      await createMockAgent(agentConfig)
+    }
+
+    console.log(`\n全エージェント起動完了。コロニーループ開始...\n`)
+    startColonyLoop()
+  } else {
+    console.log(`サーバー: ${config.server.host}:${config.server.port}  バージョン: ${config.server.version}`)
+    console.log(`エージェント数: ${config.agents.length}`)
+    console.log(`Ollama: ${config.ollama.url}`)
+    console.log('==============================\n')
+
+    // 順番に接続（サーバー負荷軽減のため5秒ずつ間隔）
+    for (const agentConfig of AGENT_CONFIGS) {
+      await createBot(agentConfig)
+      await new Promise(r => setTimeout(r, 5000))
+    }
+
+    console.log(`\n全エージェント起動完了。コロニーループ開始...\n`)
+    startColonyLoop()
   }
-
-  console.log(`\n全エージェント起動完了。コロニーループ開始...\n`)
-  startColonyLoop()
 }
 
 main().catch(console.error)

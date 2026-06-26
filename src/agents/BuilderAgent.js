@@ -22,8 +22,8 @@ const BuilderState = {
 }
 
 export class BuilderAgent extends BaseAgent {
-  constructor(name, bot, colony) {
-    super(name, 'builder', bot, colony)
+  constructor(name, role, bot, colony) {
+    super(name, role || 'builder', bot, colony)
     this.woodInHand = 0
     this.buildTarget = null
   }

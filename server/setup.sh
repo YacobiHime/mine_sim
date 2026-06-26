@@ -8,12 +8,11 @@ FORGE_VERSION="47.1.3"
 FORGE_INSTALLER="forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar"
 FORGE_URL="https://maven.minecraftforge.net/net/minecraftforge/forge/${MC_VERSION}-${FORGE_VERSION}/${FORGE_INSTALLER}"
 
-MINECOLONIES_VERSION="1.20.1-1.1.859-RELEASE"
-MINECOLONIES_JAR="minecolonies-${MINECOLONIES_VERSION}.jar"
-MINECOLONIES_URL="https://github.com/ldtteam/minecolonies/releases/download/${MINECOLONIES_VERSION}/${MINECOLONIES_JAR}"
-
-STRUCTURIZE_VERSION="1.20.1-1.0.801-RELEASE"
-STRUCTURIZE_URL="https://github.com/ldtteam/Structurize/releases/download/${STRUCTURIZE_VERSION}/structurize-${STRUCTURIZE_VERSION}.jar"
+# CurseForge File IDs (2024年7月の安定版)
+MINECOLONIES_FILE_ID="5510053"  # 1.1.603-RELEASE
+STRUCTURIZE_FILE_ID="5510044"   # 1.0.742-RELEASE
+DOMUM_ORNAMENTUM_FILE_ID="5610509"  # 1.0.196-BETA
+BLOCKUI_FILE_ID="7041657"        # 1.0.194
 
 echo "=== MineColonies Forge Server Setup ==="
 
@@ -25,27 +24,43 @@ fi
 
 # Forge installer ダウンロード
 if [ ! -f "$FORGE_INSTALLER" ]; then
-    echo "[1/4] Downloading Forge installer..."
+    echo "[1/5] Downloading Forge installer..."
     curl -L -o "$FORGE_INSTALLER" "$FORGE_URL"
 fi
 
 # Forge インストール（サーバーモード）
-echo "[2/4] Installing Forge server..."
+echo "[2/5] Installing Forge server..."
 java -jar "$FORGE_INSTALLER" --installServer
 
 # mods/ ディレクトリ準備
 mkdir -p mods
 
-# MineColonies jar ダウンロード
-if [ ! -f "mods/${MINECOLONIES_JAR}" ]; then
-    echo "[3/4] Downloading MineColonies ${MINECOLONIES_VERSION}..."
-    curl -L -o "mods/${MINECOLONIES_JAR}" "$MINECOLONIES_URL"
+# MineColonies ダウンロード
+if [ ! -f "mods/minecolonies.jar" ]; then
+    echo "[3/5] Downloading MineColonies from CurseForge..."
+    curl -L -o "mods/minecolonies.jar" \
+        "https://www.curseforge.com/api/v1/mods/245506/files/${MINECOLONIES_FILE_ID}/download"
 fi
 
-# Structurize（MineColonies依存）ダウンロード
-if [ ! -f mods/structurize-*.jar ]; then
-    echo "[4/4] Downloading Structurize (dependency)..."
-    curl -L -o "mods/structurize-${STRUCTURIZE_VERSION}.jar" "$STRUCTURIZE_URL"
+# Structurize ダウンロード
+if [ ! -f "mods/structurize.jar" ]; then
+    echo "[4/5] Downloading Structurize from CurseForge..."
+    curl -L -o "mods/structurize.jar" \
+        "https://www.curseforge.com/api/v1/mods/296937/files/${STRUCTURIZE_FILE_ID}/download"
+fi
+
+# Domum Ornamentum ダウンロード
+if [ ! -f "mods/domum_ornamentum.jar" ]; then
+    echo "[4/5] Downloading Domum Ornamentum from CurseForge..."
+    curl -L -o "mods/domum_ornamentum.jar" \
+        "https://www.curseforge.com/api/v1/mods/527361/files/${DOMUM_ORNAMENTUM_FILE_ID}/download"
+fi
+
+# BlockUI ダウンロード
+if [ ! -f "mods/blockui.jar" ]; then
+    echo "[5/5] Downloading BlockUI from CurseForge..."
+    wget -O "mods/blockui.jar" \
+        "https://edge.forgecdn.net/files/7041/657/blockui-1.20.1-1.0.194.jar"
 fi
 
 # eula.txt
@@ -64,4 +79,7 @@ EOF
 
 echo ""
 echo "=== Setup Complete! ==="
+echo "Mods downloaded:"
+ls -lh mods/*.jar
+echo ""
 echo "Run: bash start.sh"
