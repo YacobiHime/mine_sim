@@ -15,7 +15,16 @@
 
 import 'dotenv/config'
 import mineflayer from 'mineflayer'
-import minecraftProtocolForge from 'minecraft-protocol-forge'
+import { createRequire } from 'module'
+import { fileURLToPath } from 'url'
+import { dirname } from 'path'
+
+// ESMでCommonJSモジュールを読み込む
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const require = createRequire(import.meta.url)
+const minecraftProtocolForge = require('minecraft-protocol-forge')
+
 import { Colony }       from './colony/Colony.js'
 import { BuilderAgent } from './agents/BuilderAgent.js'
 import { FarmerAgent }  from './agents/FarmerAgent.js'
@@ -153,24 +162,25 @@ async function setupPathfinder(bot) {
  */
 function createBot(agentConfig, retryCount = 0) {
   return new Promise((resolve, reject) => {
+    // 先にForge対応のクライアントを作成
     const bot = mineflayer.createBot({
       host:     config.server.host,
       port:     config.server.port,
       username: agentConfig.username,
-      // MineColonies/Structurize/Domum Ornamentum はForgeの必須ネットワーク
-      // チャンネルを要求するため、固定バージョンではなく version:false で
-      // サーバーへ事前pingし、Forge(FML2)であるかを自動判定させる。
-      version:  false,
-      auth:     'offline',  // 認証なしモード
+      version:  '1.20.1',
+      auth:     'offline',
     })
 
-    // サーバーがForge(FML2)を要求してきた場合に、サーバー側が提示する
-    // mod一覧・チャンネル一覧をそのまま「持っている」と返してハンドシェイクを
-    // パスする（実際にmodを読み込むわけではないが、ログイン段階の
-    // チャンネル登録要求はこれで満たせる）。
-    // forgeMods/channels/registries を省略すると、サーバーが ping で返した
-    // ものをそのまま反映する。
-    minecraftProtocolForge.autoVersionForge(bot._client, {})
+    // Forge ハンドシェイク - createBot直後に設定
+    // loginイベントで確実に初期化された_clientに適用
+    bot.once('login', () => {
+      try {
+        minecraftProtocolForge(bot._client)
+        console.log(`[${agentConfig.username}] Forge ハンドシェイクを開始します`)
+      } catch (e) {
+        console.error(`[${agentConfig.username}] Forge設定エラー:`, e.message)
+      }
+    })
 
     bot.on('spawn', async () => {
       console.log(`[System] ${agentConfig.username} がスポーンしました`)
