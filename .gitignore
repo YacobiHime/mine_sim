@@ -41,12 +41,14 @@ build/
 minecolonies/build/
 minecolonies/.gradle/
 
-# Server
+# Server (runtime files excluded, mods/libraries included for reproducibility)
 server/forge-*.jar
-server/libraries/
 server/world/
 server/logs/
 server/crash-reports/
+server/*.json
+server/forge-*.log
+server/*.jar.log
 
 # Git
 .git/
