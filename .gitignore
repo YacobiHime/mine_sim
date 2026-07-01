@@ -50,6 +50,11 @@ server/*.json
 server/forge-*.log
 server/*.jar.log
 
+# MineSim addon (local build)
+addon/
+server/config/minesim_addon-*.toml
+server/mods/mine_sim_addon-*.jar
+
 # Git
 .git/
 .gitconfig
