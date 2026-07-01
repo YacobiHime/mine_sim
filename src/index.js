@@ -23,9 +23,6 @@ import { dirname } from 'path'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const require = createRequire(import.meta.url)
-// minecraft-protocol-forge は node-minecraft-protocol 用
-const forgeHandshake = require('minecraft-protocol-forge').forgeHandshake
-const autoVersionForge = require('minecraft-protocol-forge').autoVersionForge
 
 import { Colony }       from './colony/Colony.js'
 import { BuilderAgent } from './agents/BuilderAgent.js'
@@ -169,13 +166,12 @@ function createBot(agentConfig, retryCount = 0) {
       host:     config.server.host,
       port:     config.server.port,
       username: agentConfig.username,
-      version:  '1.20.1',
+      version:  config.server.version || '1.20.1',
       auth:     'offline',
     })
 
     console.log(`[${agentConfig.username}] 接続中...`)
 
-    // Forgeハンドシェイク - minecraft-protocolレベルで直接適用
     bot.on('error', (err) => {
       console.error(`[${agentConfig.username}] エラー:`, err.message)
     })
@@ -187,24 +183,8 @@ function createBot(agentConfig, retryCount = 0) {
       }, 5000)
     })
 
-    // kickイベントを処理
     bot.on('kicked', (reason) => {
       console.warn(`[${agentConfig.username}] キックされました:`, reason)
-    })
-
-    // 早期の段階でForgeハンドシェイクを適用
-    bot._client.on('connect', () => {
-      try {
-        forgeHandshake(bot._client, {
-          forgeMods: [
-            { modid: 'forge', version: '47.1.3' },
-            { modid: 'minecraft', version: '1.20.1' }
-          ]
-        })
-        console.log(`[${agentConfig.username}] Forgeハンドシェイクを適用しました`)
-      } catch (e) {
-        console.error(`[${agentConfig.username}] Forge設定エラー:`, e.message)
-      }
     })
 
     bot.on('spawn', async () => {

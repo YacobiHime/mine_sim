@@ -11,7 +11,7 @@ export const config = {
   server: {
     host:    process.env.MC_HOST    ?? '192.168.15.10',
     port:    parseInt(process.env.MC_PORT ?? '25565'),
-    version: process.env.MC_VERSION ?? '1.21.4',
+    version: process.env.MC_VERSION ?? '1.20.1',
   },
   ollama: {
     url:   process.env.OLLAMA_URL   ?? 'http://192.168.15.150:11434/v1',

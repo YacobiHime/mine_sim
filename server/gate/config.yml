@@ -1,0 +1,46 @@
+# Gate Minecraft Proxy Configuration
+# For mine_sim Forge integration
+
+config:
+  # Bind address for incoming connections (mineflayer bots connect here)
+  bind: 0.0.0.0:25565
+
+  # Backend servers
+  servers:
+    forge-server: localhost:25566
+
+  # Connection order
+  try:
+    - forge-server
+
+  # Allow offline mode clients (mineflayer bots use offline auth)
+  onlineMode: false
+
+  # Forwarding mode - "none" for offline mode without velocity forwarding
+  forwarding:
+    mode: none
+
+  # Announce as Forge-compatible server
+  announceForge: true
+
+  # Increase read timeout for Forge
+  readTimeout: 60s
+
+  # Increase connection timeout
+  connectionTimeout: 10s
+
+  # Rate limiting disabled for local development
+  quota:
+    connections:
+      enabled: false
+    logins:
+      enabled: false
+  packetLimiter:
+    packetsPerSecond: 0
+    bytesPerSecond: 0
+
+  # Status/MOTD configuration
+  status:
+    motd: |
+      §bMineSim Forge Proxy
+      §eGate connecting to Forge 1.20.1
