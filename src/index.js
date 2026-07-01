@@ -23,7 +23,9 @@ import { dirname } from 'path'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const require = createRequire(import.meta.url)
-const minecraftProtocolForge = require('minecraft-protocol-forge')
+// minecraft-protocol-forge は node-minecraft-protocol 用
+const forgeHandshake = require('minecraft-protocol-forge').forgeHandshake
+const autoVersionForge = require('minecraft-protocol-forge').autoVersionForge
 
 import { Colony }       from './colony/Colony.js'
 import { BuilderAgent } from './agents/BuilderAgent.js'
@@ -162,7 +164,7 @@ async function setupPathfinder(bot) {
  */
 function createBot(agentConfig, retryCount = 0) {
   return new Promise((resolve, reject) => {
-    // 先にForge対応のクライアントを作成
+    // ボットを作成
     const bot = mineflayer.createBot({
       host:     config.server.host,
       port:     config.server.port,
@@ -171,12 +173,35 @@ function createBot(agentConfig, retryCount = 0) {
       auth:     'offline',
     })
 
-    // Forge ハンドシェイク - createBot直後に設定
-    // loginイベントで確実に初期化された_clientに適用
-    bot.once('login', () => {
+    console.log(`[${agentConfig.username}] 接続中...`)
+
+    // Forgeハンドシェイク - minecraft-protocolレベルで直接適用
+    bot.on('error', (err) => {
+      console.error(`[${agentConfig.username}] エラー:`, err.message)
+    })
+
+    bot.on('end', () => {
+      console.warn(`[${agentConfig.username}] 切断。5秒後に再接続...`)
+      setTimeout(() => {
+        createBot(agentConfig, retryCount + 1).then(resolve).catch(reject)
+      }, 5000)
+    })
+
+    // kickイベントを処理
+    bot.on('kicked', (reason) => {
+      console.warn(`[${agentConfig.username}] キックされました:`, reason)
+    })
+
+    // 早期の段階でForgeハンドシェイクを適用
+    bot._client.on('connect', () => {
       try {
-        minecraftProtocolForge(bot._client)
-        console.log(`[${agentConfig.username}] Forge ハンドシェイクを開始します`)
+        forgeHandshake(bot._client, {
+          forgeMods: [
+            { modid: 'forge', version: '47.1.3' },
+            { modid: 'minecraft', version: '1.20.1' }
+          ]
+        })
+        console.log(`[${agentConfig.username}] Forgeハンドシェイクを適用しました`)
       } catch (e) {
         console.error(`[${agentConfig.username}] Forge設定エラー:`, e.message)
       }
