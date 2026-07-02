@@ -49,6 +49,8 @@ server/crash-reports/
 server/*.json
 server/forge-*.log
 server/*.jar.log
+server/gate/gate.pid
+server/*.pid
 
 # MineSim addon (local build)
 addon/
