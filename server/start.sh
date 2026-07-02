@@ -2,6 +2,10 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# ポート25566に固定（Gateプロキシ経由のため）
+echo "サーバーポートを25566に設定中..."
+sed -i 's/^server-port=.*/server-port=25566/' server.properties
+
 # 既存のMinecraftサーバープロセスを停止
 echo "既存のサーバーを確認中..."
 EXISTING_PID=$(ps aux | grep -E "java.*forge.*1.20.1" | grep -v grep | awk '{print $2}')

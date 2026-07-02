@@ -7,7 +7,10 @@ config:
 
   # Backend servers
   servers:
-    forge-server: localhost:25566
+    forge-server:
+      address: localhost:25566
+      # 特殊設定: Forgeサーバーへの接続を許可
+      # バニラクライアント（mineflayer）からの接続を受け入れる
 
   # Connection order
   try:
@@ -20,8 +23,15 @@ config:
   forwarding:
     mode: none
 
-  # Announce as Forge-compatible server
-  announceForge: false
+  # Announce as Forge-compatible server (required for FML handshake)
+  announceForge: true
+
+  # Force Forge handshake to be skipped (for vanilla clients)
+  # This allows mineflayer to connect through Gate to Forge backend
+  java:
+    # バニラクライアントをForgeサーバーに転送する際の特別設定
+    # FMLハンドシェイクをバイパスする設定
+    forgeSupport: true
 
   # Increase read timeout for Forge
   readTimeout: 60s
