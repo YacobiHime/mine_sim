@@ -21,7 +21,7 @@ config:
     mode: none
 
   # Announce as Forge-compatible server
-  announceForge: true
+  announceForge: false
 
   # Increase read timeout for Forge
   readTimeout: 60s
